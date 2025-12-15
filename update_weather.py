@@ -53,7 +53,7 @@ def build_summary(date_str):
     return " ".join(parts)
 
 
-def write_ics(start_date, days_back=90):
+def write_ics(start_date, days_back):
     events = []
 
     for i in range(days_back):
@@ -98,8 +98,16 @@ def git_commit():
 # ===== MAIN =====
 
 def main():
+    bootstrap = os.environ.get("BOOTSTRAP", "false").lower() == "true"
+
     yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
-    write_ics(yesterday, days_back=90)
+
+    if bootstrap:
+        days_back = 90   # 3 חודשים
+    else:
+        days_back = 1    # רק אתמול
+
+    write_ics(yesterday, days_back)
     git_commit()
 
 
