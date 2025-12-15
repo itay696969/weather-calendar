@@ -4,10 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       BOOTSTRAP_HISTORY:
-        description: "Run history bootstrap"
+        description: "Run 3-month history bootstrap"
         required: false
         default: "false"
-
   schedule:
     - cron: "30 7 * * *"
 
@@ -16,17 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       BOOTSTRAP_HISTORY: ${{ github.event.inputs.BOOTSTRAP_HISTORY }}
-
     steps:
       - uses: actions/checkout@v3
-
-      - uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          pip install requests
 
       - name: Configure git
         run: |
