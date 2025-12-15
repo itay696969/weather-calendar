@@ -14,13 +14,10 @@ START_HOUR = 8
 END_HOUR = 19
 ICS_FILE = "weather.ics"
 BOOTSTRAP_DAYS = 90
-MAX_RETRIES = 3
-REQUEST_TIMEOUT = 15
 
+API_URL = "https://api.open-meteo.com/v1/forecast"
 
-def was_rainy(lat, lon, date):
-    """Return True if there was rain during daytime hours."""
-    url = "https://api.open-meteo.com/v1/forecast"
+def fetch_precipitation(lat, lon, date):
     params = {
         "latitude": lat,
         "longitude": lon,
@@ -29,31 +26,28 @@ def was_rainy(lat, lon, date):
         "end_date": date,
         "timezone": "Asia/Jerusalem",
     }
+    r = requests.get(API_URL, params=params, timeout=20)
+    r.raise_for_status()
+    return r.json()["hourly"]
 
-    for attempt in range(1, MAX_RETRIES + 1):
+def was_rainy(lat, lon, date):
+    backoffs = [0.5, 1, 2, 4]
+
+    for attempt, delay in enumerate(backoffs, start=1):
         try:
-            r = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
-            r.raise_for_status()
-            data = r.json()
-
-            times = data.get("hourly", {}).get("time", [])
-            precs = data.get("hourly", {}).get("precipitation", [])
-
-            for t, p in zip(times, precs):
-                if p is None:
-                    continue
+            data = fetch_precipitation(lat, lon, date)
+            for t, r in zip(data["time"], data["precipitation"]):
                 hour = int(t.split("T")[1][:2])
-                if START_HOUR <= hour <= END_HOUR and p > 0:
+                if START_HOUR <= hour <= END_HOUR and r and r > 0:
                     return True
-
             return False
 
         except Exception as e:
-            if attempt == MAX_RETRIES:
-                print(f"⚠️ Weather API failed for {date} ({lat},{lon}): {e}")
-                return False
-            time.sleep(2 * attempt)
+            if attempt == len(backoffs):
+                raise
+            time.sleep(delay)
 
+    raise RuntimeError("Unreachable")
 
 def build_title(date):
     parts = []
@@ -61,24 +55,21 @@ def build_title(date):
         rainy = was_rainy(lat, lon, date)
         dot = "🔵" if rainy else "🟡"
         parts.append(f"{dot}{k}")
+        time.sleep(0.2)  # האטה בין אזורים
     return " ".join(parts)
 
-
 def write_event(f, date):
-    uid = f"{date}@weather"
     title = build_title(date)
     d = date.replace("-", "")
+    uid = f"{date}@weather"
 
     f.write("BEGIN:VEVENT\n")
     f.write(f"UID:{uid}\n")
-    f.write(
-        f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}\n"
-    )
+    f.write(f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}\n")
     f.write(f"DTSTART;VALUE=DATE:{d}\n")
     f.write(f"DTEND;VALUE=DATE:{d}\n")
     f.write(f"SUMMARY:{title}\n")
     f.write("END:VEVENT\n")
-
 
 def main():
     today = datetime.now(timezone.utc).date()
@@ -86,25 +77,25 @@ def main():
 
     if bootstrap:
         start = today - timedelta(days=BOOTSTRAP_DAYS)
-        print(f"🔁 Bootstrapping {BOOTSTRAP_DAYS} days")
     else:
         start = today - timedelta(days=1)
 
     end = today - timedelta(days=1)
 
     with open(ICS_FILE, "w", encoding="utf-8") as f:
-        f.write("BEGIN:VCALENDAR\n")
-        f.write("VERSION:2.0\n")
-        f.write("PRODID:-//Weather Israel//EN\n")
+        f.write("BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Weather Israel//EN\n")
 
         cur = start
         while cur <= end:
-            print(f"📅 Processing {cur}")
-            write_event(f, cur.isoformat())
+            try:
+                write_event(f, cur.isoformat())
+            except Exception as e:
+                if not bootstrap:
+                    raise
+                # bootstrap: מדלגים על יום בעייתי
             cur += timedelta(days=1)
 
         f.write("END:VCALENDAR\n")
-
 
 if __name__ == "__main__":
     main()
