@@ -1,3 +1,5 @@
+import os
+import re
 import requests
 import subprocess
 from datetime import datetime, timedelta, timezone
@@ -13,7 +15,8 @@ LAT_LON = {
 
 ICS_FILE = "weather.ics"
 SUMMARY_FILE = "summary.txt"
-DAYS_BACK = 7  # שבוע אחורה בלבד
+
+BOOTSTRAP_DAYS = 60  # כמה ימים אחורה במילוי ראשוני
 
 # ===== WEATHER =====
 
@@ -54,54 +57,83 @@ def build_summary(date_str):
 
 # ===== ICS =====
 
-def write_ics():
+def write_ics(days_back: int):
     today = datetime.now(timezone.utc).date()
-    events = []
 
-    for i in range(1, DAYS_BACK + 1):
+    # --- טען אירועים קיימים ---
+    existing_events = {}
+    if os.path.exists(ICS_FILE):
+        with open(ICS_FILE, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        for match in re.finditer(
+            r"BEGIN:VEVENT.*?UID:(?P<uid>.*?)\n.*?END:VEVENT",
+            content,
+            re.DOTALL,
+        ):
+            uid = match.group("uid").strip()
+            existing_events[uid] = match.group(0).strip()
+
+    # --- הוסף ימים חסרים בלבד ---
+    for i in range(1, days_back + 1):
         day = today - timedelta(days=i)
         date_str = day.isoformat()
+        uid = f"{date_str}@weather"
+
+        if uid in existing_events:
+            continue  # כבר קיים
+
         ymd = date_str.replace("-", "")
         summary = build_summary(date_str)
 
-        events.append(
-            f"""BEGIN:VEVENT
-UID:{date_str}@weather
-DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}
-DTSTART;VALUE=DATE:{ymd}
-DTEND;VALUE=DATE:{ymd}
-SUMMARY:{summary}
-END:VEVENT"""
-        )
+        event = "\n".join([
+            "BEGIN:VEVENT",
+            f"UID:{uid}",
+            f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
+            f"DTSTART;VALUE=DATE:{ymd}",
+            f"DTEND;VALUE=DATE:{ymd}",  # נשאר כמו שהיה אצלך
+            f"SUMMARY:{summary}",
+            "END:VEVENT",
+        ])
+
+        existing_events[uid] = event
+
+    # --- כתיבה מחדש עם כל ההיסטוריה ---
+    sorted_uids = sorted(existing_events.keys(), reverse=True)
 
     with open(ICS_FILE, "w", encoding="utf-8") as f:
         f.write(
             "BEGIN:VCALENDAR\n"
             "VERSION:2.0\n"
             "PRODID:-//Weather Israel//EN\n"
-            + "\n".join(events)
+            + "\n".join(existing_events[uid] for uid in sorted_uids)
             + "\nEND:VCALENDAR\n"
         )
 
 # ===== GIT =====
 
 def git_commit():
-    # קובץ קטן שמכריח שינוי כל ריצה
     with open(SUMMARY_FILE, "w", encoding="utf-8") as f:
         f.write(f"Last run: {datetime.now(timezone.utc).isoformat()}")
 
     subprocess.run(["git", "add", ICS_FILE, SUMMARY_FILE], check=True)
+
     subprocess.run(
-        ["git", "commit", "-m", f"Weekly weather update {datetime.now().isoformat()}"],
+        ["git", "commit", "-m", f"Daily weather update {datetime.now().isoformat()}"],
         check=False,
     )
+
     subprocess.run(["git", "push"], check=True)
 
 # ===== MAIN =====
 
 def main():
-    write_ics()
+    bootstrap = (os.getenv("BOOTSTRAP_HISTORY") or "").lower() == "true"
+    days_back = BOOTSTRAP_DAYS if bootstrap else 1
+
+    write_ics(days_back)
     git_commit()
+
 
 if __name__ == "__main__":
     main()
