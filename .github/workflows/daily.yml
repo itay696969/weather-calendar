@@ -11,7 +11,6 @@ on:
   schedule:
     - cron: "30 7 * * *"
 
-
 jobs:
   update:
     runs-on: ubuntu-latest
@@ -19,13 +18,12 @@ jobs:
       BOOTSTRAP_HISTORY: ${{ github.event.inputs.BOOTSTRAP_HISTORY }}
     steps:
       - uses: actions/checkout@v3
-      - name: Run update
-        run: |
-          python update_weather.py
-      - name: Commit changes
+
+      - name: Configure git
         run: |
           git config user.name "weather-bot"
           git config user.email "bot@weather.local"
-          git add weather.ics
-          git commit -m "Update weather for yesterday" || echo "No changes"
-          git push
+
+      - name: Run update
+        run: |
+          python update_weather.py
