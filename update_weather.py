@@ -104,9 +104,16 @@ def write_event(f, date, bootstrap):
 
 
 def git_commit(msg):
-    subprocess.run(["git", "add", ICS_FILE, LOG_JSON, LOG_SUMMARY], check=True)
+    files = [ICS_FILE]
+    if os.path.exists(LOG_JSON):
+        files.append(LOG_JSON)
+    if os.path.exists(LOG_SUMMARY):
+        files.append(LOG_SUMMARY)
+
+    subprocess.run(["git", "add"] + files, check=True)
     subprocess.run(["git", "commit", "-m", msg], check=True)
     subprocess.run(["git", "push"], check=True)
+
 
 
 def main():
