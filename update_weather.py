@@ -27,7 +27,7 @@ def was_rainy(lat, lon, date):
     data = requests.get(url, params=params, timeout=20).json()
     for t, r in zip(data["hourly"]["time"], data["hourly"]["precipitation"]):
         hour = int(t.split("T")[1][:2])
-        if START_HOUR <= hour <= END_HOUR and r > 0:
+        if r is not None and START_HOUR <= hour <= END_HOUR and r > 0:
             return True
     return False
 
