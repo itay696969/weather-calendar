@@ -53,25 +53,32 @@ def build_summary(date_str):
     return " ".join(parts)
 
 
-def write_ics(date):
-    date_str = date.isoformat()
-    ymd = date_str.replace("-", "")
-    summary = build_summary(date_str)
+def write_ics(start_date, days_back=90):
+    events = []
 
-    with open(ICS_FILE, "w", encoding="utf-8") as f:
-        f.write(
-            f"""BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Weather Israel//EN
-BEGIN:VEVENT
+    for i in range(days_back):
+        date = start_date - timedelta(days=i)
+        date_str = date.isoformat()
+        ymd = date_str.replace("-", "")
+        summary = build_summary(date_str)
+
+        events.append(
+            f"""BEGIN:VEVENT
 UID:{date_str}@weather
 DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}
 DTSTART;VALUE=DATE:{ymd}
 DTEND;VALUE=DATE:{ymd}
 SUMMARY:{summary}
-END:VEVENT
-END:VCALENDAR
-"""
+END:VEVENT"""
+        )
+
+    with open(ICS_FILE, "w", encoding="utf-8") as f:
+        f.write(
+            "BEGIN:VCALENDAR\n"
+            "VERSION:2.0\n"
+            "PRODID:-//Weather Israel//EN\n"
+            + "\n".join(events)
+            + "\nEND:VCALENDAR\n"
         )
 
 
@@ -91,8 +98,8 @@ def git_commit():
 # ===== MAIN =====
 
 def main():
-    today = datetime.now(timezone.utc).date() - timedelta(days=1)
-    write_ics(today)
+    yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
+    write_ics(yesterday, days_back=90)
     git_commit()
 
 
