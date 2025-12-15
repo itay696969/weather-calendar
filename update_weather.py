@@ -129,10 +129,15 @@ def git_commit():
 
 def main():
     bootstrap = (os.getenv("BOOTSTRAP_HISTORY") or "").lower() == "true"
-    days_back = BOOTSTRAP_DAYS if bootstrap else 1
+
+    # כמה ימים אחורה
+    days_back = 60 if bootstrap else 1
+
+    print(f"BOOTSTRAP_HISTORY={bootstrap} → days_back={days_back}")
 
     write_ics(days_back)
     git_commit()
+
 
 
 if __name__ == "__main__":
