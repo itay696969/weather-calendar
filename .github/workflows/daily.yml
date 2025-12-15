@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       BOOTSTRAP_HISTORY:
-        description: "Run 60-day history bootstrap"
+        description: "Run history bootstrap"
         required: false
         default: "false"
 
@@ -14,23 +14,22 @@ on:
 jobs:
   update:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     env:
       BOOTSTRAP_HISTORY: ${{ github.event.inputs.BOOTSTRAP_HISTORY }}
 
     steps:
       - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
-      - uses: actions/setup-python@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install requests
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
 
       - name: Configure git
         run: |
@@ -38,4 +37,5 @@ jobs:
           git config user.email "bot@weather.local"
 
       - name: Run update
-        run: python update_weather.py
+        run: |
+          python update_weather.py
