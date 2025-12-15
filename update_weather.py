@@ -1,68 +1,63 @@
-from datetime import date, timedelta
-import uuid
+import requests
+from datetime import datetime, timedelta, timezone
 
-ICS_PATH = "weather.ics"
+# ========= CONFIG =========
+LAT_LON = {
+    "צ": (32.7940, 34.9896),   # צפון – חיפה
+    "מ": (32.0853, 34.7818),   # מרכז – תל אביב
+    "ד": (31.252973, 34.791462),  # דרום – באר שבע
+    "י": (31.7683, 35.2137),   # ירושלים
+}
 
-def load_ics():
-    try:
-        with open(ICS_PATH, "r", encoding="utf-8") as f:
-            return f.read().splitlines()
-    except FileNotFoundError:
-        return [
-            "BEGIN:VCALENDAR",
-            "VERSION:2.0",
-            "PRODID:-//Weather Dots//IL//HE"
-        ]
+START_HOUR = 8
+END_HOUR = 19
+ICS_FILE = "weather.ics"
+# ==========================
 
-def save_ics(lines):
-    if lines[-1] != "END:VCALENDAR":
-        lines.append("END:VCALENDAR")
-    with open(ICS_PATH, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines))
+def was_rainy(lat, lon, date):
+    url = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "hourly": "precipitation",
+        "start_date": date,
+        "end_date": date,
+        "timezone": "Asia/Jerusalem",
+    }
+    data = requests.get(url, params=params, timeout=20).json()
+    hours = data["hourly"]["time"]
+    rain = data["hourly"]["precipitation"]
 
-def rain_detected(yesterday):
-    # כרגע החזרה קבועה — נחליף בהמשך ל־API
+    for h, r in zip(hours, rain):
+        hour = int(h.split("T")[1].split(":")[0])
+        if START_HOUR <= hour <= END_HOUR and r > 0:
+            return True
     return False
 
-def update_yesterday():
-    yesterday = date.today() - timedelta(days=1)
-    symbol = "🔵" if rain_detected(yesterday) else "🟡"
+def build_event_title(date):
+    parts = []
+    for region, (lat, lon) in LAT_LON.items():
+        rainy = was_rainy(lat, lon, date)
+        dot = "🔵" if rainy else "🟡"
+        parts.append(f"{dot}{region}")
+    return " ".join(parts)
 
-    lines = load_ics()
+def main():
+    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()
+    title = build_event_title(yesterday)
 
-    # הסרת אירוע קיים של אתמול
-    filtered = []
-    skip = False
-    buffer = []
-
-    for line in lines:
-        if line == "BEGIN:VEVENT":
-            buffer = [line]
-            skip = False
-        elif line.startswith("DTSTART") and yesterday.strftime("%Y%m%d") in line:
-            skip = True
-            buffer = []
-        elif line == "END:VEVENT":
-            if not skip:
-                buffer.append(line)
-                filtered.extend(buffer)
-            skip = False
-            buffer = []
-        else:
-            buffer.append(line)
-
-    uid = str(uuid.uuid4())
-
-    filtered.extend([
-        "BEGIN:VEVENT",
-        f"UID:{uid}",
-        f"DTSTART;VALUE=DATE:{yesterday.strftime('%Y%m%d')}",
-        f"DTEND;VALUE=DATE:{(yesterday + timedelta(days=1)).strftime('%Y%m%d')}",
-        f"SUMMARY:{symbol}",
-        "END:VEVENT"
-    ])
-
-    save_ics(filtered)
+    with open(ICS_FILE, "w", encoding="utf-8") as f:
+        f.write("BEGIN:VCALENDAR\n")
+        f.write("VERSION:2.0\n")
+        f.write("PRODID:-//Weather Dots Israel//EN\n")
+        f.write("BEGIN:VEVENT\n")
+        f.write(f"UID:{yesterday}@weather\n")
+        f.write(f"DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}\n")
+        f.write(f"DTSTART;VALUE=DATE:{yesterday.replace('-', '')}\n")
+        f.write(f"DTEND;VALUE=DATE:{yesterday.replace('-', '')}\n")
+        f.write(f"SUMMARY:{title}\n")
+        f.write("END:VEVENT\n")
+        f.write("END:VCALENDAR\n")
 
 if __name__ == "__main__":
-    update_yesterday()
+    main()
