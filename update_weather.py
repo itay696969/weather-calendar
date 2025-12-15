@@ -24,6 +24,22 @@ def was_rainy(lat, lon, date):
         "end_date": date,
         "timezone": "Asia/Jerusalem",
     }
+
+    try:
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+
+        for t, r in zip(data["hourly"]["time"], data["hourly"]["precipitation"]):
+            hour = int(t.split("T")[1][:2])
+            if START_HOUR <= hour <= END_HOUR and r and r > 0:
+                return True
+
+    except Exception as e:
+        print(f"⚠️ API failed for {date} ({lat},{lon}): {e}")
+
+    return False
+
     data = requests.get(url, params=params, timeout=20).json()
     for t, r in zip(data["hourly"]["time"], data["hourly"]["precipitation"]):
         hour = int(t.split("T")[1][:2])
