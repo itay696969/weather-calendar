@@ -1,0 +1,22 @@
+name: Update Weather Calendar
+
+on:
+  schedule:
+    - cron: "30 5 * * *"   # 07:30 ישראל
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run update
+        run: |
+          python update_weather.py
+      - name: Commit changes
+        run: |
+          git config user.name "weather-bot"
+          git config user.email "bot@weather.local"
+          git add weather.ics
+          git commit -m "Update weather for yesterday" || echo "No changes"
+          git push
