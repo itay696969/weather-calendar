@@ -12,7 +12,7 @@ LAT_LON = {
 
 ICS_FILE = "weather.ics"
 SUMMARY_FILE = "summary.txt"
-DAYS_BACK = 7  # שבוע אחורה בלבד
+DAYS_BACK = 60  # שבוע אחורה בלבד
 
 # ===== WEATHER =====
 def fetch_rain_status(lat, lon, date_str):
