@@ -26,26 +26,20 @@ def was_rainy(lat, lon, date):
     }
 
     try:
-        resp = requests.get(url, params=params, timeout=10)
+        resp = requests.get(url, params=params, timeout=20)
         resp.raise_for_status()
         data = resp.json()
-
-        for t, r in zip(data["hourly"]["time"], data["hourly"]["precipitation"]):
-            hour = int(t.split("T")[1][:2])
-            if START_HOUR <= hour <= END_HOUR and r and r > 0:
-                return True
-
     except Exception as e:
-        print(f"⚠️ API failed for {date} ({lat},{lon}): {e}")
+        print(f"⚠️ Weather fetch failed for {date} ({lat},{lon}): {e}")
+        return False  # לא מפיל את כל הריצה
 
-    return False
-
-    data = requests.get(url, params=params, timeout=20).json()
     for t, r in zip(data["hourly"]["time"], data["hourly"]["precipitation"]):
         hour = int(t.split("T")[1][:2])
-        if r is not None and START_HOUR <= hour <= END_HOUR and r > 0:
+        if START_HOUR <= hour <= END_HOUR and (r or 0) > 0:
             return True
+
     return False
+
 
 def build_title(date):
     parts = []
