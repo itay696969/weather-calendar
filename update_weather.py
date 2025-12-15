@@ -83,7 +83,7 @@ END:VEVENT"""
 
 
 def git_commit():
-    # תמיד מכריח שינוי
+    # תמיד מכריח שינוי כדי ש-GitHub Pages יתעדכן
     with open(SUMMARY_FILE, "w", encoding="utf-8") as f:
         f.write(f"Last run: {datetime.now(timezone.utc).isoformat()}")
 
@@ -98,12 +98,13 @@ def git_commit():
 # ===== MAIN =====
 
 def main():
+    # האם זו ריצת bootstrap (היסטוריה)
     bootstrap = os.environ.get("BOOTSTRAP", "false").lower() == "true"
 
     yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
 
     if bootstrap:
-        days_back = 90   # 3 חודשים
+        days_back = 90   # 3 חודשים אחורה
     else:
         days_back = 1    # רק אתמול
 
