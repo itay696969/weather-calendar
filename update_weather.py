@@ -1,7 +1,7 @@
-import requests
-import subprocess
 import os
 import re
+import requests
+import subprocess
 from datetime import datetime, timedelta, timezone
 
 # ===== CONFIG =====
@@ -15,8 +15,7 @@ LAT_LON = {
 
 ICS_FILE = "weather.ics"
 SUMMARY_FILE = "summary.txt"
-
-BOOTSTRAP_DAYS = 90   # 3 חודשים אחורה
+BOOTSTRAP_DAYS = 60   # ⬅️ כאן קובע ההיסטוריה
 
 # ===== WEATHER =====
 
@@ -40,6 +39,7 @@ def fetch_rain_status(lat, lon, date_str):
     except Exception:
         return None
 
+
 def build_summary(date_str):
     parts = []
     for region, (lat, lon) in LAT_LON.items():
@@ -52,30 +52,34 @@ def build_summary(date_str):
 
 def write_ics(days_back: int):
     today = datetime.now(timezone.utc).date()
-    events = {}
+    existing_events = {}
 
     if os.path.exists(ICS_FILE):
         with open(ICS_FILE, "r", encoding="utf-8") as f:
             content = f.read()
 
-        for m in re.finditer(
+        for match in re.finditer(
             r"BEGIN:VEVENT.*?UID:(?P<uid>.*?)\n.*?END:VEVENT",
             content,
             re.DOTALL,
         ):
-            events[m.group("uid").strip()] = m.group(0).strip()
+            uid = match.group("uid").strip()
+            existing_events[uid] = match.group(0).strip()
+
+    added = 0
 
     for i in range(1, days_back + 1):
         day = today - timedelta(days=i)
-        uid = f"{day}@weather"
+        date_str = day.isoformat()
+        uid = f"{date_str}@weather"
 
-        if uid in events:
+        if uid in existing_events:
             continue
 
-        ymd = day.strftime("%Y%m%d")
-        summary = build_summary(day.isoformat())
+        ymd = date_str.replace("-", "")
+        summary = build_summary(date_str)
 
-        events[uid] = "\n".join([
+        event = "\n".join([
             "BEGIN:VEVENT",
             f"UID:{uid}",
             f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
@@ -85,20 +89,30 @@ def write_ics(days_back: int):
             "END:VEVENT",
         ])
 
+        existing_events[uid] = event
+        added += 1
+
+    sorted_uids = sorted(existing_events.keys(), reverse=True)
+
     with open(ICS_FILE, "w", encoding="utf-8") as f:
         f.write(
             "BEGIN:VCALENDAR\n"
             "VERSION:2.0\n"
             "PRODID:-//Weather Israel//EN\n"
-            + "\n".join(events[k] for k in sorted(events, reverse=True))
+            + "\n".join(existing_events[uid] for uid in sorted_uids)
             + "\nEND:VCALENDAR\n"
         )
 
+    return added
+
 # ===== GIT =====
 
-def git_commit():
+def git_commit(added):
     with open(SUMMARY_FILE, "w", encoding="utf-8") as f:
-        f.write(f"Last run: {datetime.now(timezone.utc).isoformat()}")
+        f.write(
+            f"Last run: {datetime.now(timezone.utc).isoformat()}\n"
+            f"Events added: {added}\n"
+        )
 
     subprocess.run(["git", "add", ICS_FILE, SUMMARY_FILE], check=True)
     subprocess.run(
@@ -113,8 +127,8 @@ def main():
     bootstrap = (os.getenv("BOOTSTRAP_HISTORY") or "").lower() == "true"
     days_back = BOOTSTRAP_DAYS if bootstrap else 1
 
-    write_ics(days_back)
-    git_commit()
+    added = write_ics(days_back)
+    git_commit(added)
 
 if __name__ == "__main__":
     main()
